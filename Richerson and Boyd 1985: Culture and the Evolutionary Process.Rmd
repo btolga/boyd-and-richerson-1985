@@ -1,0 +1,360 @@
+---
+title: "Richerson and Boyd 1985: Culture and the Evolutionary Process"
+output: html_notebook
+---
+
+
+
+
+
+```{r install-libraries, echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+suppressPackageStartupMessages(library(dplyr))
+```
+
+
+
+
+# Chapter 1: Overview 
+
+
+# Chapter 2: Some Methodological Preliminaries 
+
+
+```{r}
+
+```
+
+
+# Chapter 3: The Cultural Inheritance System 
+
+
+## Model 1
+First model is from genetic evolution: evolution at a single locus of a haploid sexual organism. Haploid means there is a single set of chromosome, so we don't need to worry about keeping track of two genes in the same loci in two chromosomes.
+
+
+Two alleles (variants): _a_ and _b_
+
+At time 0, we have $N_a$ number of individuals with allele a and $N_b$ number of individuals with allele b where
+$N_a + N_b = N$
+
+$$ \text{Frequency of allele a}  = q = \frac{N_a}{N_a + N_b}$$
+This is not a cultural species and the only change that can happen is to the genes. So we will track the frequency of allele a, q. 
+
+We need a recursion formula for this. 
+
+In the next generation, a random individual will have a set of two parents. The combination of all potential parents and the probability that this individual will inherit allele a or allele b depending on the parents is given in the table below; 
+
+
+```{r model1-recursion-table, echo=FALSE, warning=FALSE}
+
+Male_Model <- c('A', 'A', 'B', 'B')
+Female_Model <- c('A', 'B', 'A', 'B')
+Prob_Variant_A <- c(1, 0.5, 0.5, 0)
+Prob_Variant_B <- c(0, 0.5, 0.5, 1)
+
+recursion_table <- tibble(Male_Model = Male_Model, Female_Model = Female_Model,
+                          Prob_Variant_A = Prob_Variant_A, Prob_Variant_B = Prob_Variant_B)
+kable(recursion_table)
+
+```
+
+
+
+Using this recursion function:
+
+```{r model1, echo=FALSE, warning=FALSE}
+
+N=100000
+q = 0.7
+t= 200
+runs = 50
+
+create_gen0 <- function(N = N, q = q){
+
+  gen0 <- sample(c(1,0), size = N, replace = TRUE, prob = c(q, 1-q))
+  return(gen0)
+}
+
+gen0 <- create_gen0(N = N, q = q)
+
+q_list <- rep(NA, t)
+
+get_q <- function(gen_t){
+  
+  q_t <- mean(gen_t)
+  return(q_t)
+}
+
+q_list[1] <- get_q(gen0)
+
+gen_tplus1 <- function(N, gen_t, n_parent = 2){
+  
+# get all parents in a row with replicate
+# rowSums gives the total number of variant marked with 1 in the parent generation as models
+# prob of getting 1 is then normalized by n_parent
+  
+ probs = rowSums(replicate(n_parent, sample(gen_t, replace = TRUE))) / n_parent
+ gen_tplus1 <- rbinom(n = N, size = 1, prob = probs)
+ return(gen_tplus1)
+}
+  
+for(i in 2:t){
+  
+  gen_prev <- gen0
+  
+  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+  q_list[i] <- get_q(gen0)
+
+}
+
+
+
+  plot(q_list,
+       type = 'l', 
+       ylab = "p, proportion of agents with trait A", 
+       xlab = "generation", 
+       ylim = c(0,1), 
+       main = paste("N =", N))
+  abline(h = q, col = 'red')
+  
+
+
+```
+
+
+
+Questions to Delve Into:
+
+
+1. What is the mean and variance over many runs?
+2. What percentage of the times over R runs that we get a variant fixed as a function of t and N
+3. Does the variance over time mean anything? Does it change in each different run?
+
+
+
+Next, we introduce mutation. 
+
+```{r model1b, echo=FALSE}
+
+
+
+
+
+
+```
+
+
+## Model 2
+Second model 
+
+```{r model2-recursion-table, echo=FALSE, warning=FALSE}
+
+
+Model1 <- c('c', 'c', 'c', 'd', 'd', 'd', 'c', 'd')
+Model2 <- c('c', 'c', 'd', 'c', 'd', 'c', 'd', 'd')
+Model3 <- c('c', 'd', 'c', 'c', 'c', 'd', 'd', 'd')
+
+Prob_Variant_c <- c('1', 'A1 + A2', 'A1 + A3', 'A2 + A3', 'A3', 'A2', 'A1', '0')
+Prob_Variant_d <- c('0', 'A3', 'A2', 'A1', 'A1 + A2', 'A1 + A3', 'A2 + A3', '1')
+
+recursion_table <- tibble(Model1 = Model1, Model2 = Model2, Model3 = Model3,
+                          Prob_Variant_c = Prob_Variant_c, Prob_Variant_d = Prob_Variant_d)
+kable(recursion_table)
+
+```
+
+
+
+Using the recursion table:
+
+```{r model2, echo=FALSE}
+
+
+N=100000
+q = 0.7
+t= 200
+runs = 50
+
+A1 = 0.2
+A2 = 0.5
+A3 = 0.3
+
+
+create_gen0 <- function(N = N, q = q){
+
+  gen0 <- sample(c(1,0), size = N, replace = TRUE, prob = c(q, 1-q))
+  return(gen0)
+}
+
+gen0 <- create_gen0(N = N, q = q)
+
+q_list <- rep(NA, t)
+
+get_q <- function(gen_t){
+  
+  q_t <- mean(gen_t)
+  return(q_t)
+}
+
+q_list[1] <- get_q(gen0)
+
+gen_tplus1 <- function(N, gen_t, n_parent = 3, weights = c(A1,A2,A3)){
+  
+# get all parents in a row with replicate
+# rowSums gives the total number of variant marked with 1 in the parent generation as models
+# prob of getting 1 is then normalized by n_parent
+  
+  
+  
+## We need to introduce errors from a multivariate normal. need to determine the covariance structure. 
+## let's try an exponential decay structure and constant variance otherwise. 
+#errors =   
+probs = replicate(n_parent, sample(gen_t, replace = TRUE)) %*% weights
+
+gen_tplus1 <- rbinom(n = N, size = 1, prob = probs)
+ return(gen_tplus1)
+}
+  
+for(i in 2:t){
+  
+  gen_prev <- gen0
+  
+  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+  q_list[i] <- get_q(gen0)
+
+}
+
+
+
+  plot(q_list,
+       type = 'l', 
+       ylab = "p, proportion of agents with trait A", 
+       xlab = "generation", 
+       ylim = c(0,1), 
+       main = paste("N =", N))
+  abline(h = q, col = 'red')
+  
+
+
+
+
+```
+
+
+Before moving on to the next model with a continuous cultural variant, R&B make two remarks on models 1 and 2:
+
+1. Horizontal transmission has the same mathematical structure as vertical/oblique transmission. The only difference between the two is that in vertical transmission, tranmission happens from generation at time t to generation at time t+1 whereas with horizontal transmission, transmission happens at time $t+ \Delta t$. 
+
+2. Cultural drift is not something R&B focuses on. WE will study Cavalli-Sforza and Feldman for that. But they do remark that with drift (small N), $p'$ has a distribution with mean p and variance $\frac{1}{N}p(1-p)$. 
+
+
+## Model 3: Blending Inheritence
+
+In this model, the cultural variant is no longer a dichotomous variable but a continuous one. So, in the population, the cultural variants will have a probability density distributio of P(X). R&B claims for most cultural variants, we can approximate the pdf with a normal distribution $X \sim N(\bar{X}, V)$
+
+
+The naive individual will estimate model i's cultural variant as $Z_{i} = X_{i} + e_{i}$. The error can be due to: environment affecting model i's phenotype, random variation of model performance or estimation error for Z.
+Further assume $e_{i} \sim N(0, E_{i})$ and $Cov(e_{i}, e_{j}) = E_{ij}$
+
+For a naive individual 0, they decide on their cultural characteristic following:
+$$ X_{0} = \sum_{i = 1}^{N} A_{i}Z_{i}$$
+
+
+
+```{r model3, echo=FALSE}
+
+
+
+# We will consider 3 model case where each model has a cultural variant
+# that is a continuous variable. They all 'draw' from the same normal
+# disteibution with mean X_bar. We allow covariance Sigma which we will
+# default to independence. 
+
+# We further assume there is error variance in the naive individual's perception
+# of the model's variants. The noise will be mean 0 with Sigma_E where we again
+# allow for covariance. We will play with this covariance structure to observe
+# its effect on the results.
+
+N=1000
+mean_x = 10
+var_x = 4
+t= 200
+runs = 50
+
+A1 = 0.2
+A2 = 0.5
+A3 = 0.3
+
+create_gen0 <- function(N = N, mean_x = mean_x, var_x = var_x){
+  
+  Sigma = diag(N)*var_x 
+  mean_x_vector = rep(mean_x, N)
+  gen0 <- mvrnorm(n = 1, mu = mean_x_vector, Sigma = Sigma)
+  #gen0 <- rnorm(n = N, mean = mean_x, sd = sqrt(var_x))
+}
+
+gen0 <- create_gen0(N = N, mean_x = mean_x, var_x = var_x)
+
+mean_x_list <- rep(NA, t)
+
+get_mean_x <- function(gen_t){
+  
+  mean_x <- mean(gen_t)
+  return(mean_x)
+}
+
+mean_x_list[1] <- get_mean_x(gen0)
+
+
+get_noise <- function(N, n_parent = 3, var_e = 4, rho = exp(1),  lamda = 10){
+  
+  mean_e_vector <- rep(0, N)
+
+  mat <- diag(N)
+  mat2 <- abs((row(mat)-col(mat))) / -lamda
+  sigma_e = rho^mat2 * var_e
+
+  noise <- mvrnorm(n = n_parent, mu = mean_e_vector, Sigma = sigma_e)
+
+  return(t(noise))
+
+}
+
+
+gen_tplus1 <- function(N, gen_t, n_parent = 3, var_e = 2, weights = c(A1,A2,A3)){
+  
+# get all parents in a row with replicate
+# rowSums gives the total number of variant marked with 1 in the parent generation as models
+# prob of getting 1 is then normalized by n_parent
+
+ noise = get_noise(N = N, n_parent = n_parent, var_e = var_e)  
+ gen_tplus1 <- (replicate(n_parent, sample(gen_t, replace = TRUE)) + noise) %*% weights
+ return(gen_tplus1)
+}
+  
+for(i in 2:t){
+  
+  gen_prev <- gen0
+  
+  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+  mean_x_list[i] <- get_mean_x(gen0)
+
+}
+
+
+
+  plot(mean_x_list,
+       type = 'l', 
+       ylab = "Xbar, mean of trait A", 
+       xlab = "generation", 
+       ylim = c(0,20), 
+       main = paste("N =", N))
+  abline(h = mean_x, col = 'red')
+  
+
+
+
+
+```
+
