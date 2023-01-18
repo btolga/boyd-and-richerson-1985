@@ -1,0 +1,1 @@
+# boyd-and-richerson-1985
