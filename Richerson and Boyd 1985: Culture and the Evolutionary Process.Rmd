@@ -10,12 +10,18 @@ output: html_notebook
 ```{r install-libraries, echo=FALSE, message=FALSE, warning=FALSE}
 library(knitr)
 suppressPackageStartupMessages(library(dplyr))
+library(ggplot2)
 ```
 
 
 
 
 # Chapter 1: Overview 
+
+
+
+
+
 
 
 # Chapter 2: Some Methodological Preliminaries 
@@ -63,22 +69,15 @@ kable(recursion_table)
 
 Using this recursion function:
 
-```{r model1, echo=FALSE, warning=FALSE}
+
+
+```{r model1new, warning=FALSE}
 
 N=100000
 q = 0.7
 t= 200
 runs = 50
-
-create_gen0 <- function(N = N, q = q){
-
-  gen0 <- sample(c(1,0), size = N, replace = TRUE, prob = c(q, 1-q))
-  return(gen0)
-}
-
-gen0 <- create_gen0(N = N, q = q)
-
-q_list <- rep(NA, t)
+n_parent = 2 
 
 get_q <- function(gen_t){
   
@@ -86,7 +85,11 @@ get_q <- function(gen_t){
   return(q_t)
 }
 
-q_list[1] <- get_q(gen0)
+create_gen0 <- function(N = N, q = q){
+
+  gen0 <- sample(c(1,0), size = N, replace = TRUE, prob = c(q, 1-q))
+  return(gen0)
+}
 
 gen_tplus1 <- function(N, gen_t, n_parent = 2){
   
@@ -98,8 +101,22 @@ gen_tplus1 <- function(N, gen_t, n_parent = 2){
  gen_tplus1 <- rbinom(n = N, size = 1, prob = probs)
  return(gen_tplus1)
 }
+
+get_gen_t <- function(N, n_parent, q, t){
   
-for(i in 2:t){
+
+  # First we create a vector to hold the frequency of the trait
+  q_list <- rep(NA, t)
+  
+  ## Then we will create the first generation gen0
+  gen0 <- create_gen0(N= N, q = q)
+  
+  # We calculate and save the frequency of the cultural trait in gen0
+  q_list[1] <- get_q(gen0)
+
+  # Next, we get the rest of the generations based on the transmission rule
+  
+  for(i in 2:t){
   
   gen_prev <- gen0
   
@@ -108,7 +125,17 @@ for(i in 2:t){
 
 }
 
+   return(q_list)  
 
+}
+
+run_simulation <- function(N, n_parent, q, t, r){
+  
+  replicate(r, get_gen_t(N = N, n_parent = n_parent, q = q, t = t))
+  
+}
+
+q_list <- run_simulation(N = N, n_parent = n_parent, q = q, t = t, r = 1)
 
   plot(q_list,
        type = 'l', 
@@ -117,8 +144,36 @@ for(i in 2:t){
        ylim = c(0,1), 
        main = paste("N =", N))
   abline(h = q, col = 'red')
-  
 
+  
+```
+
+```{r model1_multiple_runs, warning=FALSE}
+
+N=200
+q = 0.5
+t= 1000
+runs = 1000
+n_parent = 2 
+
+
+q_list <- run_simulation(N = N, n_parent = n_parent, q = q, t = t, r = runs)
+
+## We take the means and variances of each generation for 200 generation ACROSS
+## r different runs.
+## ie, first mean is the mean of th frequency of trait in gen0 across r runs and so on. 
+means <- rowMeans(q_list)
+variances <- apply(q_list, MARGIN = 1, var)
+expected_variance <- sapply(means, function(i) (i*(1-i)/sqrt(N)))
+
+df_to_plot <- tibble::tibble(generations = rep(c(1:t), 2), values = c(means, variances), statistic = c(rep('mean', length(means)), rep('variance', length(variances))))
+
+p <- ggplot(data = df_to_plot, aes(x= generations, y = values)) +
+  geom_point() + 
+  geom_line() +
+ facet_wrap(~statistic, scales = "free") 
+
+print(p)
 
 ```
 
@@ -357,4 +412,48 @@ for(i in 2:t){
 
 
 ```
+
+
+The expected variance is:
+
+$$ V' = \sum_{i=1}^{N}(V+E_{i}) + 2\sum_{i>j}A_{i}A_{j}(E_{ij}+ V \text{Corr}(X_{i}X_{j}))$$
+
+
+Let's see if we can get an approximate result from our simulations.
+
+
+
+
+```{r model3-variance-check, echo=FALSE}
+
+
+
+run_blending_inheritance <- function(N = N, mean_x = mean_x, var_x = var_x,t= 200, weights = c(0.2,0.5,0.3)){
+
+  Sigma = diag(N)*var_x 
+  mean_x_vector = rep(mean_x, N)
+  gen0 <- mvrnorm(n = 1, mu = mean_x_vector, Sigma = Sigma)
+
+
+  mean_x_list <- rep(NA, t)
+
+  for(i in 2:t){
+  
+    gen_prev <- gen0
+    gen0 <- gen_tplus1(N, gen_t = gen_prev, n_parents = 3, var_e = 2, weights = weights)
+    mean_x_list[i] <- get_mean_x(gen0)
+    }
+
+  return(mean_x_list)
+
+}
+
+
+run_blending_inheritance(N=1000)
+
+```
+
+
+
+
 
