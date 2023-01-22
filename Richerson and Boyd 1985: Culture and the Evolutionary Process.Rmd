@@ -193,6 +193,94 @@ Next, we introduce mutation.
 ```{r model1b, echo=FALSE}
 
 
+N=100000
+q = 0.7
+t= 200
+runs = 50
+n_parent = 2 
+mu_a = 0.4 # mutation rate from a to b
+mu_b = 0.1 # mutation rate from b to a
+
+get_q <- function(gen_t){
+  
+  q_t <- mean(gen_t)
+  return(q_t)
+}
+
+create_gen0 <- function(N = N, q = q){
+
+  gen0 <- sample(c(1,0), size = N, replace = TRUE, prob = c(q, 1-q))
+  return(gen0)
+}
+
+
+get_mutation <- function(k, mu_a, mu_b){
+  
+# k = 1 if variant a, 0 if b.
+# we will use these probabilities to get the conversion to a.
+# so if you already are a. you have mu_a prob of becoming b but
+# this is the same as 1-mua prob of staying a, ie 1. 
+return(  k*(1-mu_a) + (1-k)*(mu_b))
+}
+
+gen_tplus1 <- function(N, gen_t, n_parent = 2, mu_a, mu_b){
+  
+# get all parents in a row with replicate
+# rowSums gives the total number of variant marked with 1 in the parent generation as models
+# prob of getting 1 is then normalized by n_parent
+  
+ probs = rowSums(replicate(n_parent, sample(gen_t, replace = TRUE))) / n_parent
+ gen_tplus1 <- rbinom(n = N, size = 1, prob = probs)
+ mutation_probs <- sapply(gen_tplus1, get_mutation, mu_a = mu_a, mu_b = mu_b)
+ gen_tplus1_after_mutation <- rbinom(n = N, size = 1, prob = mutation_probs)
+ return(gen_tplus1_after_mutation)
+}
+
+get_gen_t <- function(N, n_parent, q, t, mu_a, mu_b){
+  
+
+  # First we create a vector to hold the frequency of the trait
+  q_list <- rep(NA, t)
+  
+  ## Then we will create the first generation gen0
+  gen0 <- create_gen0(N= N, q = q)
+  
+  # We calculate and save the frequency of the cultural trait in gen0
+  q_list[1] <- get_q(gen0)
+
+  # Next, we get the rest of the generations based on the transmission rule
+  
+  for(i in 2:t){
+  
+  gen_prev <- gen0
+  
+  gen0 <- gen_tplus1(N, gen_t = gen_prev, mu_a = mu_a, mu_b = mu_b)
+  q_list[i] <- get_q(gen0)
+
+}
+
+   return(q_list)  
+
+}
+
+run_simulation <- function(N, n_parent, q, t, mu_a, mu_b, r){
+  
+  replicate(r, get_gen_t(N = N, n_parent = n_parent, q = q, t = t, mu_a = mu_a, mu_b = mu_b))
+  
+}
+
+q_list <- run_simulation(N = N, n_parent = n_parent, q = q, t = t,  mu_a = mu_a, mu_b = mu_b, r = 1)
+
+analytical_equilibrium <- mu_b / (mu_a + mu_b) 
+  
+  
+  plot(q_list,
+       type = 'l', 
+       ylab = "p, proportion of agents with trait A", 
+       xlab = "generation", 
+       ylim = c(0,1), 
+       main = paste("N =", N))
+  abline(h = analytical_equilibrium, col = 'red')
 
 
 
