@@ -11,6 +11,7 @@ output: html_notebook
 library(knitr)
 suppressPackageStartupMessages(library(dplyr))
 library(ggplot2)
+library(MASS)
 ```
 
 
@@ -314,7 +315,8 @@ Using the recursion table:
 ```{r model2, echo=FALSE}
 
 
-N=100000
+N=10000
+n_parent = 3
 q = 0.7
 t= 200
 runs = 50
@@ -342,7 +344,19 @@ get_q <- function(gen_t){
 
 q_list[1] <- get_q(gen0)
 
-gen_tplus1 <- function(N, gen_t, n_parent = 3, weights = c(A1,A2,A3)){
+
+
+
+get_mutation <- function(k, mu_a, mu_b){
+  
+# k = 1 if variant a, 0 if b.
+# we will use these probabilities to get the conversion to a.
+# so if you already are a. you have mu_a prob of becoming b but
+# this is the same as 1-mua prob of staying a, ie 1. 
+return(  k*(1-mu_a) + (1-k)*(mu_b))
+}
+
+gen_tplus1 <- function(N, gen_t, n_parent = 3, weights = c(A1,A2,A3), mu_a = mu_a, mu_b = mu_b){
   
 # get all parents in a row with replicate
 # rowSums gives the total number of variant marked with 1 in the parent generation as models
@@ -354,21 +368,59 @@ gen_tplus1 <- function(N, gen_t, n_parent = 3, weights = c(A1,A2,A3)){
 ## let's try an exponential decay structure and constant variance otherwise. 
 #errors =   
 probs = replicate(n_parent, sample(gen_t, replace = TRUE)) %*% weights
-
 gen_tplus1 <- rbinom(n = N, size = 1, prob = probs)
- return(gen_tplus1)
+mutation_probs <- sapply(gen_tplus1, get_mutation, mu_a = mu_a, mu_b = mu_b)
+gen_tplus1_after_mutation <- rbinom(n = N, size = 1, prob = mutation_probs)
+
+ return(gen_tplus1_after_mutation)
 }
   
-for(i in 2:t){
+#for(i in 2:t){
+#  
+#  gen_prev <- gen0
+#  
+#  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+#  q_list[i] <- get_q(gen0)
+
+#}
+
+get_gen_t <- function(N, n_parent, q, t, mu_a, mu_b){
+  
+
+  # First we create a vector to hold the frequency of the trait
+  q_list <- rep(NA, t)
+  
+  ## Then we will create the first generation gen0
+  gen0 <- create_gen0(N= N, q = q)
+  
+  # We calculate and save the frequency of the cultural trait in gen0
+  q_list[1] <- get_q(gen0)
+
+  # Next, we get the rest of the generations based on the transmission rule
+  
+  for(i in 2:t){
   
   gen_prev <- gen0
   
-  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+  gen0 <- gen_tplus1(N, gen_t = gen_prev, mu_a = mu_a, mu_b = mu_b)
   q_list[i] <- get_q(gen0)
 
 }
 
+   return(q_list)  
 
+}
+
+
+run_simulation <- function(N, n_parent, q, t, mu_a, mu_b, r){
+  
+  replicate(r, get_gen_t(N = N, n_parent = n_parent, q = q, t = t, mu_a = mu_a, mu_b = mu_b))
+  
+}
+
+q_list <- run_simulation(N=N, n_parent = n_parent, q = q, t = t, mu_a = mu_a, mu_b = mu_b, r =1)
+
+analytical_equilibrium <- mu_b / (mu_a + mu_b) 
 
   plot(q_list,
        type = 'l', 
@@ -376,11 +428,8 @@ for(i in 2:t){
        xlab = "generation", 
        ylim = c(0,1), 
        main = paste("N =", N))
-  abline(h = q, col = 'red')
+  abline(h = analytical_equilibrium, col = 'red')
   
-
-
-
 
 ```
 
@@ -411,8 +460,7 @@ $$ X_{0} = \sum_{i = 1}^{N} A_{i}Z_{i}$$
 
 # We will consider 3 model case where each model has a cultural variant
 # that is a continuous variable. They all 'draw' from the same normal
-# disteibution with mean X_bar. We allow covariance Sigma which we will
-# default to independence. 
+# distribution with mean X_bar. 
 
 # We further assume there is error variance in the naive individual's perception
 # of the model's variants. The noise will be mean 0 with Sigma_E where we again
@@ -421,25 +469,26 @@ $$ X_{0} = \sum_{i = 1}^{N} A_{i}Z_{i}$$
 
 N=1000
 mean_x = 10
-var_x = 4
+var_x = 10
 t= 200
 runs = 50
-
+n_parent = 3
+var_e = 2
 A1 = 0.2
 A2 = 0.5
 A3 = 0.3
 
-create_gen0 <- function(N = N, mean_x = mean_x, var_x = var_x){
+create_gen0 <- function(N, mean_x, var_x){
   
-  Sigma = diag(N)*var_x 
-  mean_x_vector = rep(mean_x, N)
-  gen0 <- mvrnorm(n = 1, mu = mean_x_vector, Sigma = Sigma)
-  #gen0 <- rnorm(n = N, mean = mean_x, sd = sqrt(var_x))
+  #Sigma = diag(N)*var_x 
+  #mean_x_vector = rep(mean_x, N)
+  #gen0 <- mvrnorm(n = 1, mu = mean_x_vector, Sigma = Sigma)
+  gen0 <- rnorm(n = N, mean = mean_x, sd = sqrt(var_x))
+  return(gen0)
 }
 
-gen0 <- create_gen0(N = N, mean_x = mean_x, var_x = var_x)
-
-mean_x_list <- rep(NA, t)
+#gen0 <- create_gen0(N = 1000, mean_x = mean_x, var_x = var_x)
+#mean_x_list <- rep(NA, t)
 
 get_mean_x <- function(gen_t){
   
@@ -447,55 +496,154 @@ get_mean_x <- function(gen_t){
   return(mean_x)
 }
 
-mean_x_list[1] <- get_mean_x(gen0)
+#mean_x_list[1] <- get_mean_x(gen0)
 
 
-get_noise <- function(N, n_parent = 3, var_e = 4, rho = exp(1),  lamda = 10){
+#get_noise <- function(N, n_parent, var_e, rho = exp(1),  lamda = 10){
+#  
+#  mean_e_vector <- rep(0, N)
+#
+#  mat <- diag(N)
+#  mat2 <- abs((row(mat)-col(mat))) / -lamda
+#  sigma_e = rho^mat2 * var_e
+#
+#  noise <- mvrnorm(n = n_parent, mu = mean_e_vector, Sigma = sigma_e)
+#
+#  return(t(noise))
+#
+#}
+#
+get_noise <- function(N , n_parent, var_e , rho = exp(1),  lamda = 5){
   
-  mean_e_vector <- rep(0, N)
+  mean_e_vector <- rep(0, n_parent)
 
-  mat <- diag(N)
+  mat <- diag(n_parent)
   mat2 <- abs((row(mat)-col(mat))) / -lamda
   sigma_e = rho^mat2 * var_e
+  noise <- mvrnorm(n = N, mu = mean_e_vector, Sigma = sigma_e)
 
-  noise <- mvrnorm(n = n_parent, mu = mean_e_vector, Sigma = sigma_e)
-
-  return(t(noise))
+  return(noise)
 
 }
 
 
-gen_tplus1 <- function(N, gen_t, n_parent = 3, var_e = 2, weights = c(A1,A2,A3)){
+gen_tplus1 <- function(N, gen_t, n_parent, var_e , weights = c(A1,A2,A3)){
   
 # get all parents in a row with replicate
 # rowSums gives the total number of variant marked with 1 in the parent generation as models
 # prob of getting 1 is then normalized by n_parent
 
  noise = get_noise(N = N, n_parent = n_parent, var_e = var_e)  
+ print(dim(noise))
  gen_tplus1 <- (replicate(n_parent, sample(gen_t, replace = TRUE)) + noise) %*% weights
  return(gen_tplus1)
 }
   
-for(i in 2:t){
+#for(i in 2:t){
+#  
+#  gen_prev <- gen0
+#  
+#  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+#  mean_x_list[i] <- get_mean_x(gen0)
+#
+#}
+  
+get_gen_t <- function(N, n_parent, mean_x, var_x, t, var_e, weights = c(A1,A2,A3)){
+  
+  # First we create a vector to hold the frequency of the trait
+  mean_x_list <- rep(NA, t)
+
+  # Then create another list for the variance
+  var_x_list <- rep(NA, t)
+
+  ## Then we will create the first generation gen0
+  gen0 <- create_gen0(N = N , mean_x = mean_x , var_x = var_x)
+  
+  # We calculate and save the frequency of the cultural trait in gen0 and the variance
+  mean_x_list[1] <- get_mean_x(gen0)
+  var_x_list[1] <- var(gen0)
+  # Next, we get the rest of the generations based on the transmission rule
+  
+  for(i in 2:t){
   
   gen_prev <- gen0
   
-  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+  gen0 <- gen_tplus1(N = N, gen_t = gen_prev, n_parent = n_parent, var_e = var_e, weights = weights)
   mean_x_list[i] <- get_mean_x(gen0)
+  var_x_list[i] <- var(gen0)
+}
+  
+  return(list(mean_list = mean_x_list, var_list = var_x_list))  
 
 }
 
 
+run_simulation <- function(N, n_parent, mean_x, var_x, var_e, t, r, weights = c(A1,A2,A3)){
+  
+  replicate(r, get_gen_t(N = N, n_parent = n_parent, mean_x = mean_x, var_x = var_x, t = t, var_e = var_e, weights = weights))
+  
+}
+  
+results <- run_simulation(N = N, n_parent = n_parent, mean_x = mean_x, var_x = var_x, var_e = var_e, t = t, r=1)
 
-  plot(mean_x_list,
-       type = 'l', 
-       ylab = "Xbar, mean of trait A", 
-       xlab = "generation", 
-       ylim = c(0,20), 
-       main = paste("N =", N))
-  abline(h = mean_x, col = 'red')
+
+
+mat <- diag(n_parent)
+mat2 <- abs((row(mat)-col(mat))) / -lamda
+sigma_e = rho^mat2 * var_e
+
+analytic_variance <- function(weights, var0, sigma_e){
+  
+  
+  sum1 <- sum((var0 + diag(sigma_e))*weights^2 )
+  
+  sum2 <- 0
+  for (i in 1:length(weights))
+    for(j in 1:length(weights))
+      if (j > i)
+        sum2 = sum2 + weights[i]*weights[j]*sigma_e[i,j]
+  
+  return(sum1 + sum2)
+}
+
+analytic_variances <- c(results[2,]$var_list[1])
+for (i in 1:(t-1)){
+  analytic_variances[i+1] <- analytic_variance(weights = weights, var0 = results[2,]$var_list[i], sigma_e = sigma_e)
+}
+
+plot(unlist(results[1,]),
+     type = 'l', 
+     ylab = "Xbar, mean of trait A", 
+     xlab = "generation", 
+     ylim = c(0,20), 
+     main = paste("N =", N))
+abline(h = mean_x, col = 'red')
   
 
+plot(unlist(results[2,]),
+     type = 'l', 
+     ylab = "Xbar, mean of trait A", 
+     xlab = "generation", 
+     ylim = c(0,20), 
+     main = paste("N =", N))
+lines(analytic_variances, col = 'red')
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
 
 
@@ -515,29 +663,20 @@ Let's see if we can get an approximate result from our simulations.
 ```{r model3-variance-check, echo=FALSE}
 
 
-
-run_blending_inheritance <- function(N = N, mean_x = mean_x, var_x = var_x,t= 200, weights = c(0.2,0.5,0.3)){
-
-  Sigma = diag(N)*var_x 
-  mean_x_vector = rep(mean_x, N)
-  gen0 <- mvrnorm(n = 1, mu = mean_x_vector, Sigma = Sigma)
+n_parent = 3
+var_e = 2
+weights = c(A1,A2,A3)
 
 
-  mean_x_list <- rep(NA, t)
+n_parent = 3
+var_e = 4
+rho = exp(1)
+lamda = 5
+mean_e_vector <- rep(0, N)
 
-  for(i in 2:t){
-  
-    gen_prev <- gen0
-    gen0 <- gen_tplus1(N, gen_t = gen_prev, n_parents = 3, var_e = 2, weights = weights)
-    mean_x_list[i] <- get_mean_x(gen0)
-    }
-
-  return(mean_x_list)
-
-}
+mean_e_vector <- rep(0, n_parent)
 
 
-run_blending_inheritance(N=1000)
 
 ```
 
