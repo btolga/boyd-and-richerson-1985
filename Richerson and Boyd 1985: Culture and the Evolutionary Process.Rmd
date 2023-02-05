@@ -19,6 +19,36 @@ library(MASS)
 
 # Chapter 1: Overview 
 
+The reasons why Darwinism was rejected in the 20th century social sciences:
+
+1. Before the mid 20th century synthesis of Darwinism and population genetics, Darwinism wasn't understood well enough.
+2. Biologists failed to produce an adequate account of human behavior so social sceintists had no reason to consider Darwinism.
+3. Culture plays an important role in human behavior so biology in itself is not enough in understanding social sciences. 
+
+
+R&B give A Darwinian account of cultural organisms. 
+
+*Culture:* The transmission from one generation to the next, via teaching and imitation, of knowledge, values, and other factors that infuence behavior. 
+
+Cultural transmission has various structures.
+
+*Structure:* The patterns of socialization by which a given trait or set of traits are transmitted in a given society.
+
+The theory should be capable of doing two things:
+
+1. Predict the effect og different structures of cultural transmission on the evolutionary process. (eg, do certain behaviors become common if transmitted via imitating peers)
+2. Understand the conditions under which different structures of cultural transmission can evolve. (when should natural selection favor peers imitating one another)
+
+*Forces:* Causes of cultural change, the analogs of natural selection, mutation, drift.
+
+
+Idea is to first model cultural transmission and understand its effects. Then link it to genetic evolution to understand when and how natural selection can give rise to such modes of cultural transmission. That's the essence of R&B's _Dual Inheritance Theory_.
+
+*Dual Inheritance Model*
+
+
+
+
 
 
 
@@ -74,7 +104,7 @@ Using this recursion function:
 
 ```{r model1new, warning=FALSE}
 
-N=100000
+N=1000
 q = 0.7
 t= 200
 runs = 50
@@ -154,7 +184,7 @@ q_list <- run_simulation(N = N, n_parent = n_parent, q = q, t = t, r = 1)
 N=200
 q = 0.5
 t= 1000
-runs = 1000
+runs = 100
 n_parent = 2 
 
 
@@ -477,6 +507,9 @@ var_e = 2
 A1 = 0.2
 A2 = 0.5
 A3 = 0.3
+rho = exp(1)
+lamda = 5
+weights = c(A1,A2,A3)
 
 create_gen0 <- function(N, mean_x, var_x){
   
@@ -534,7 +567,6 @@ gen_tplus1 <- function(N, gen_t, n_parent, var_e , weights = c(A1,A2,A3)){
 # prob of getting 1 is then normalized by n_parent
 
  noise = get_noise(N = N, n_parent = n_parent, var_e = var_e)  
- print(dim(noise))
  gen_tplus1 <- (replicate(n_parent, sample(gen_t, replace = TRUE)) + noise) %*% weights
  return(gen_tplus1)
 }
@@ -622,7 +654,7 @@ abline(h = mean_x, col = 'red')
 
 plot(unlist(results[2,]),
      type = 'l', 
-     ylab = "Xbar, mean of trait A", 
+     ylab = "Variance of trait A", 
      xlab = "generation", 
      ylim = c(0,20), 
      main = paste("N =", N))
@@ -652,11 +684,14 @@ lines(analytic_variances, col = 'red')
 
 The expected variance is:
 
-$$ V' = \sum_{i=1}^{N}(V+E_{i}) + 2\sum_{i>j}A_{i}A_{j}(E_{ij}+ V \text{Corr}(X_{i}X_{j}))$$
+$$ V' = \sum_{i=1}^{N}A_{i}^2(V+E_{i}) + 2\sum_{i>j}A_{i}A_{j}(E_{ij}+ V \text{Corr}(X_{i}X_{j}))$$
 
 
 Let's see if we can get an approximate result from our simulations.
 
+Assuming $E_{i} = E$ and $E_{ij} = EC$ and $A_{i} = A_{j} = 1/n$ and $Corr(X_{i},X_{j}) = R$ we have the equilibrium variance as:
+
+$$\hat{V} = \frac{E(1 + (n-1)C)}{(n-1)(1-R)}$$ 
 
 
 
@@ -682,5 +717,14 @@ mean_e_vector <- rep(0, n_parent)
 
 
 
+Question: How can I draw the model parents with a correlation structure? Use a discrete joint pmf?
 
 
+Fisher writes: The effect of correlation between mates is to hasten, if the correlation is negative, or to retard if positive, the tendency of blending inheritance to reduce the variance; such effects are not of importance, for even if the correlation were as high as 0.5, and mates had to be as much alike as parent and child usually are, the rate of decay would be little more than halved. The important consequence of the blending is that, if not safeguarded by intense marital correlation, the heritable variance is approximately halved in every generation. To maintain a stationary variance fresh mutations must be available in each generation to supply the half of the variance so lost. If variability persists, as Darwin rightly inferred, causes of new variability must continually be at work. Almost every individual of each generation must be a mutant, i.e. must be influenced by such causes, and moreover must be a mutant in many different characters. 
+
+
+```{r model4-multi-factor-model, echo=FALSE}
+
+
+
+```
