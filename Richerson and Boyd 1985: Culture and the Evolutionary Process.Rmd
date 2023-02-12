@@ -723,8 +723,155 @@ Question: How can I draw the model parents with a correlation structure? Use a d
 Fisher writes: The effect of correlation between mates is to hasten, if the correlation is negative, or to retard if positive, the tendency of blending inheritance to reduce the variance; such effects are not of importance, for even if the correlation were as high as 0.5, and mates had to be as much alike as parent and child usually are, the rate of decay would be little more than halved. The important consequence of the blending is that, if not safeguarded by intense marital correlation, the heritable variance is approximately halved in every generation. To maintain a stationary variance fresh mutations must be available in each generation to supply the half of the variance so lost. If variability persists, as Darwin rightly inferred, causes of new variability must continually be at work. Almost every individual of each generation must be a mutant, i.e. must be influenced by such causes, and moreover must be a mutant in many different characters. 
 
 
+
+Multifactorial Inheritance 
+
+$Prob(X_{0} = Z_{i}|Z_{1},Z_{2},...,Z_{N}) = A_{i}$
+
 ```{r model4-multi-factor-model, echo=FALSE}
+
+## We should think about generalizing the code to accommodate N cultural models instead of the current 3
+
+
+N=10000
+mean_x = 10
+var_x = 10
+t= 500
+runs = 50
+n_parent = 300
+var_e = 0
+#A1 = 0.2
+#A2 = 0.5
+#A3 = 0.3
+#weights = c(A1,A2,A3)
+
+
+get_weights <- function(n_parent){
+  #function to get random weights for n cultural parents
+  
+  
+coordinates <- sort(c(0, runif(n_parent-1, min = 0, max = 1),1))
+weights <- coordinates - lag(coordinates)
+weights <- weights[!is.na(weights)]
+return(weights)  
+}
+
+
+create_gen0 <- function(N, mean_x, var_x){
+  
+  #Sigma = diag(N)*var_x 
+  #mean_x_vector = rep(mean_x, N)
+  #gen0 <- mvrnorm(n = 1, mu = mean_x_vector, Sigma = Sigma)
+  gen0 <- rnorm(n = N, mean = mean_x, sd = sqrt(var_x))
+  return(gen0)
+}
+
+#gen0 <- create_gen0(N = 1000, mean_x = mean_x, var_x = var_x)
+#mean_x_list <- rep(NA, t)
+
+get_mean_x <- function(gen_t){
+  
+  mean_x <- mean(gen_t)
+  return(mean_x)
+}
+
+
+get_noise <- function(N , mean_error = 0, var_e){
+  noise <- rnorm(n = N, mean = mean_error, sd = sqrt(var_e))
+
+  return(noise)
+
+}
+
+my_weights <- get_weights(n_parent = n_parent)
+
+gen_tplus1 <- function(N, gen_t, n_parent, var_e, weights = my_weights){
+  
+# get all parents in a row with replicate
+# we want to choose only one of the n_parent number of models with associated weights. 
+# so we apply sample function per row to decide on the cultural model that will be copied for each naive individual (aka rows)
+# 
+ noise = get_noise(N = N, var_e = var_e)  
+ gen_tplus1 <- apply(replicate(n_parent, sample(gen_t, replace = TRUE)), 1, sample, size = 1, replace = TRUE, prob = weights) + noise
+#gen_tplus1 <- sample(x = gen_t, size = N, replace = TRUE, prob = my_weights)
+
+ return(gen_tplus1)
+}
+  
+#for(i in 2:t){
+#  
+#  gen_prev <- gen0
+#  
+#  gen0 <- gen_tplus1(N, gen_t = gen_prev)
+#  mean_x_list[i] <- get_mean_x(gen0)
+#
+#}
+  
+get_gen_t <- function(N, n_parent, mean_x, var_x, t, var_e, weights = my_weights){
+  
+  # First we create a vector to hold the frequency of the trait
+  mean_x_list <- rep(NA, t)
+
+  # Then create another list for the variance
+  var_x_list <- rep(NA, t)
+
+  ## Then we will create the first generation gen0
+  gen0 <- create_gen0(N = N , mean_x = mean_x , var_x = var_x)
+  
+  # We calculate and save the frequency of the cultural trait in gen0 and the variance
+  mean_x_list[1] <- get_mean_x(gen0)
+  var_x_list[1] <- var(gen0)
+  # Next, we get the rest of the generations based on the transmission rule
+  
+  for(i in 2:t){
+  
+  gen_prev <- gen0
+  
+  gen0 <- gen_tplus1(N = N, gen_t = gen_prev, n_parent = n_parent, var_e = var_e, weights = my_weights)
+  mean_x_list[i] <- get_mean_x(gen0)
+  var_x_list[i] <- var(gen0)
+}
+  
+  return(list(mean_list = mean_x_list, var_list = var_x_list, last_gen = gen0))  
+
+}
+
+run_simulation <- function(N, n_parent, mean_x, var_x, var_e, t, r, weights = weights){
+  
+  replicate(r, get_gen_t(N = N, n_parent = n_parent, mean_x = mean_x, var_x = var_x, t = t, var_e = var_e, weights = my_weights))
+  
+}
+  
+results <- run_simulation(N = N, n_parent = n_parent, mean_x = mean_x, var_x = var_x, var_e = var_e, t = t, r=1)
+
+
+plot(unlist(results[1,]),
+     type = 'l', 
+     ylab = "Xbar, mean of trait A", 
+     xlab = "generation", 
+     ylim = c(0,20), 
+     main = paste("N =", N))
+abline(h = mean_x, col = 'red')
+  
+
+plot(unlist(results[2,]),
+     type = 'l', 
+     ylab = "Variance of trait A", 
+     xlab = "generation", 
+     main = paste("N =", N))
+#lines(analytic_variances, col = 'red')
+  
+
+
+
+
 
 
 
 ```
+
+So it is true that when transmission error is 0, the variance stays constant or else it increases. However, we need to choose big N and choose n_parents to be relatively big but not equal to N. If n_parent is too small we get drift and start losing the variance. 
+
+## CHECK OUT {furrr} package for the sims
+
+
